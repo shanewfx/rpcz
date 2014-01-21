@@ -1,11 +1,11 @@
 // Copyright 2011 Google Inc. All Rights Reserved.
-// 
+//
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
 // You may obtain a copy of the License at
-// 
+//
 //     http://www.apache.org/licenses/LICENSE-2.0
-// 
+//
 // Unless required by applicable law or agreed to in writing, software
 // distributed under the License is distributed on an "AS IS" BASIS,
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
@@ -18,8 +18,9 @@
 #define RPCZ_CONNECTION_MANAGER_H
 
 #include <string>
-#include <boost/function.hpp>
-#include <boost/thread.hpp>
+#include <functional>
+#include <unordered_map>
+#include <vector>
 #include "rpcz/macros.hpp"
 #include "rpcz/sync_event.hpp"
 
@@ -44,7 +45,7 @@ class message_vector;
 //
 //          connection_manager cm(10);
 //          connection c = cm.connect("tcp://localhost:5557");
-// 
+//
 //      Now, it is possible to send requests to this backend fron any thread:
 //
 //          c.send_request(...);
@@ -68,9 +69,9 @@ class connection_manager {
     DEADLINE_EXCEEDED = 3,
   };
 
-  typedef boost::function<void(const client_connection&, message_iterator&)>
+  typedef std::function<void(const client_connection&, message_iterator&)>
       server_function;
-  typedef boost::function<void(status status, message_iterator&)>
+  typedef std::function<void(status status, message_iterator&)>
       client_request_callback;
 
   // Constructs a connection_manager that has nthreads worker threads. The
@@ -105,9 +106,8 @@ class connection_manager {
 
   inline zmq::socket_t& get_frontend_socket();
 
-  boost::thread broker_thread_;
-  boost::thread_group worker_threads_;
-  boost::thread_specific_ptr<zmq::socket_t> socket_;
+  std::thread broker_thread_;
+  std::vector<std::thread> worker_threads_;
   std::string frontend_endpoint_;
   sync_event is_termating_;
 

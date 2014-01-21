@@ -23,7 +23,6 @@
 #include <iostream>
 #include <utility>
 
-#include <boost/bind.hpp>
 #include <google/protobuf/descriptor.h>
 #include <google/protobuf/message.h>
 #include <google/protobuf/stubs/common.h>
@@ -165,7 +164,9 @@ void server::register_service(rpcz::rpc_service *rpc_service,
 }
 
 void server::bind(const std::string& endpoint) {
-  connection_manager::server_function f = boost::bind(
+  using std::placeholders::_1;
+  using std::placeholders::_2;
+  connection_manager::server_function f = std::bind(
       &server::handle_request, this, _1, _2);
   connection_manager_.bind(endpoint, f);
 }

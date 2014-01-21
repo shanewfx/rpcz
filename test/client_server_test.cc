@@ -15,9 +15,9 @@
 // Author: nadavs@google.com <Nadav Samet>
 
 #include <iostream>
-#include <boost/thread/thread.hpp>
 #include <glog/logging.h>
 #include <gtest/gtest.h>
+#include <thread>
 #include <zmq.hpp>
 
 #include "rpcz/callback.hpp"
@@ -67,12 +67,12 @@ class SearchServiceImpl : public SearchService {
     } else if (request.query() == "timeout") {
       // We "lose" the request. We are going to reply only when we get a request
       // for the query "delayed".
-      boost::unique_lock<boost::mutex> lock(mu_);
+      std::unique_lock<std::mutex> lock(mu_);
       delayed_reply_ = reply;
       timeout_request_received.signal();
       return;
     } else if (request.query() == "delayed") {
-      boost::unique_lock<boost::mutex> lock(mu_);
+      std::unique_lock<std::mutex> lock(mu_);
       delayed_reply_.send(SearchResponse());
       reply.send(SearchResponse());
     } else if (request.query() == "terminate") {
@@ -90,7 +90,7 @@ class SearchServiceImpl : public SearchService {
 
  private:
   scoped_ptr<SearchService_Stub> backend_;
-  boost::mutex mu_;
+  std::mutex mu_;
   reply<SearchResponse> delayed_reply_;
   connection_manager* cm_;
 };

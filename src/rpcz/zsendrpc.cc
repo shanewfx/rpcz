@@ -16,7 +16,6 @@
 
 #include <iostream>
 #include <vector>
-#include <boost/bind.hpp>
 #include <boost/program_options.hpp>
 #include <google/protobuf/compiler/importer.h>
 #include <google/protobuf/dynamic_message.h>
@@ -41,6 +40,7 @@ using std::cout;
 using std::cerr;
 
 namespace po = boost::program_options;
+namespace ph = std::placeholders;
 
 std::string FLAGS_proto;
 std::string FLAGS_service_name;
@@ -63,8 +63,7 @@ int run_call(const std::string& endpoint,
   DiskSourceTree disk_source_tree;
   ErrorCollector error_collector;
   for_each(FLAGS_proto_path.begin(), FLAGS_proto_path.end(),
-      boost::bind(&DiskSourceTree::MapPath,
-          &disk_source_tree, _1, _1));
+      std::bind(&DiskSourceTree::MapPath, &disk_source_tree, ph::_1, ph::_1));
   Importer imp(&disk_source_tree, &error_collector);
 
   const FileDescriptor* file_desc = imp.Import(FLAGS_proto);
@@ -146,7 +145,7 @@ int run(std::vector<std::string> args) {
   } else {
     if (args.size() != 4) {
       cerr << "call needs 3 arguments:" <<
-          "call <endpoint> <service.method> <payload>" 
+          "call <endpoint> <service.method> <payload>"
           << endl << endl;
       return ARGV_ERROR;
     }

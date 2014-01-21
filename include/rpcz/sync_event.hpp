@@ -17,7 +17,8 @@
 #ifndef RPCZ_SYNC_EVENT_H
 #define RPCZ_SYNC_EVENT_H
 
-#include <boost/thread/thread.hpp>
+#include <thread>
+#include <condition_variable>
 #include "rpcz/macros.hpp"
 
 namespace rpcz {
@@ -36,8 +37,8 @@ class sync_event {
 
  private:
   bool ready_;
-  boost::mutex mu_;
-  boost::condition_variable cond_;
+  std::mutex mu_;
+  std::condition_variable cond_;
   DISALLOW_COPY_AND_ASSIGN(sync_event);
 };
 

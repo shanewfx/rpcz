@@ -22,15 +22,16 @@ sync_event::sync_event() : ready_(false) {
 }
 
 void sync_event::wait() {
-  boost::unique_lock<boost::mutex> lock(mu_);
+  std::unique_lock<std::mutex> lock(mu_);
   while (!ready_) {
     cond_.wait(lock);
   }
 }
 
 void sync_event::signal() {
-  boost::unique_lock<boost::mutex> lock(mu_);
+  std::unique_lock<std::mutex> lock(mu_);
   ready_ = true;
   cond_.notify_all();
 }
+
 }  // namespace rpcz

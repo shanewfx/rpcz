@@ -1,11 +1,11 @@
 // Copyright 2011 Google Inc. All Rights Reserved.
-// 
+//
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
 // You may obtain a copy of the License at
-// 
+//
 //     http://www.apache.org/licenses/LICENSE-2.0
-// 
+//
 // Unless required by applicable law or agreed to in writing, software
 // distributed under the License is distributed on an "AS IS" BASIS,
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
@@ -15,7 +15,7 @@
 // Author: nadavs@google.com <Nadav Samet>
 
 #include "rpcz/zmq_utils.hpp"
-#include <boost/functional/hash.hpp>
+#include <utility>
 #include <sstream>
 #include <stddef.h>
 #include <string.h>
@@ -45,9 +45,7 @@ bool read_message_to_vector(zmq::socket_t* socket,
   while (1) {
     zmq::message_t *msg = new zmq::message_t;
     socket->recv(msg, 0);
-    int64_t more;           //  Multipart detection
-    size_t more_size = sizeof (more);
-    socket->getsockopt(ZMQ_RCVMORE, &more, &more_size);
+    bool more = msg->more();
     data->push_back(msg);
     if (!more) {
       break;
@@ -63,9 +61,7 @@ bool read_message_to_vector(zmq::socket_t* socket,
   while (1) {
     zmq::message_t *msg = new zmq::message_t;
     socket->recv(msg, 0);
-    int64_t more;           //  Multipart detection
-    size_t more_size = sizeof(more);
-    socket->getsockopt(ZMQ_RCVMORE, &more, &more_size);
+    bool more = msg->more();           //  Multipart detection
     if (first_part) {
       routes->push_back(msg);
       if (msg->size() == 0) {
@@ -84,7 +80,7 @@ void write_vector_to_socket(zmq::socket_t* socket,
                             message_vector& data,
                             int flags) {
   for (size_t i = 0; i < data.size(); ++i) {
-    socket->send(data[i], 
+    socket->send(data[i],
                  flags |
                  ((i < data.size() - 1) ? ZMQ_SNDMORE : 0));
   }
@@ -125,13 +121,13 @@ bool forward_message(zmq::socket_t &socket_in,
   message_vector routes;
   message_vector data;
   CHECK(!read_message_to_vector(&socket_in, &routes, &data));
-  write_vector_to_socket(&socket_out, routes); 
+  write_vector_to_socket(&socket_out, routes);
   return true;
 }
 
 void log_message_vector(message_vector& vector) {
   LOG(INFO) << "---- " << vector.size() << "----";
-  boost::hash<std::string> hash;
+  std::hash<std::string> hash;
   for (int i = 0; i < vector.size(); ++i) {
     std::string message(message_to_string(vector[i]));
     std::stringstream ss;

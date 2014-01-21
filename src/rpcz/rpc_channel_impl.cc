@@ -14,6 +14,7 @@
 //
 // Author: nadavs@google.com <Nadav Samet>
 
+#include <functional>
 #include <google/protobuf/descriptor.h>
 #include <zmq.hpp>
 #include "rpcz/callback.hpp"
@@ -25,6 +26,8 @@
 #include "rpcz/zmq_utils.hpp"
 
 namespace rpcz {
+
+namespace ph = std::placeholders;
 
 rpc_channel* rpc_channel::create(connection connection) {
   return new rpc_channel_impl(connection);
@@ -88,8 +91,8 @@ void rpc_channel_impl::call_method_full(
   connection_.send_request(
       msg_vector,
       rpc_->get_deadline_ms(),
-      bind(&rpc_channel_impl::handle_client_response, this,
-           response_context, _1, _2));
+      std::bind(&rpc_channel_impl::handle_client_response, this,
+           response_context, ph::_1, ph::_2));
 }
 
 void rpc_channel_impl::call_method0(const std::string& service_name,

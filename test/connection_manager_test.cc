@@ -14,13 +14,13 @@
 //
 // Author: nadavs@google.com <Nadav Samet>
 
-#include <boost/lexical_cast.hpp>
-#include <boost/ptr_container/ptr_vector.hpp>
-#include <boost/thread/condition_variable.hpp>
-#include <boost/thread/mutex.hpp>
-#include <boost/thread/thread.hpp>
+#include <condition_variable>
+#include <functional>
 #include <glog/logging.h>
+#include <memory>
 #include <stdio.h>
+#include <string>
+#include <thread>
 #include <zmq.hpp>
 #include "gtest/gtest.h"
 #include "rpcz/callback.hpp"
@@ -29,6 +29,7 @@
 #include "rpcz/sync_event.hpp"
 #include "rpcz/zmq_utils.hpp"
 
+namespace ph = std::placeholders;
 
 namespace rpcz {
 
@@ -64,10 +65,10 @@ void echo_server(zmq::socket_t *socket) {
   delete socket;
 }
 
-boost::thread start_server(zmq::context_t* context) {
+std::thread start_server(zmq::context_t* context) {
   zmq::socket_t* server = new zmq::socket_t(*context, ZMQ_DEALER);
   server->bind("inproc://server.test");
-  return boost::thread(boost::bind(echo_server, server));
+  return std::thread(std::bind(echo_server, server));
 }
 
 message_vector* create_simple_request(int number=0) {
@@ -103,7 +104,7 @@ TEST_F(connection_manager_test, TestTimeoutAsync) {
 
   sync_event event;
   connection.send_request(*request, 0,
-                         boost::bind(&expect_timeout, _1, _2, &event));
+                         std::bind(&expect_timeout, ph::_1, ph::_2, &event));
   event.wait();
 }
 
@@ -112,62 +113,61 @@ class barrier_closure : public connection_manager::client_request_callback {
   barrier_closure() : count_(0) {}
 
   void run(connection_manager::status status, message_iterator& iter) {
-    boost::unique_lock<boost::mutex> lock(mutex_);
+    std::unique_lock<std::mutex> lock(mutex_);
     ++count_;
     cond_.notify_all();
   }
 
   virtual void wait(int n) {
-    boost::unique_lock<boost::mutex> lock(mutex_);
+    std::unique_lock<std::mutex> lock(mutex_);
     while (count_ < n) {
       cond_.wait(lock);
     }
   }
 
  private:
-  boost::mutex mutex_;
-  boost::condition_variable cond_;
+  std::mutex mutex_;
+  std::condition_variable cond_;
   int count_;
 };
 
 void SendManyMessages(connection connection, int thread_id) {
-  boost::ptr_vector<message_vector> requests;
+  std::vector<std::unique_ptr<message_vector>> requests;
   const int request_count = 100;
   barrier_closure barrier;
   for (int i = 0; i < request_count; ++i) {
     message_vector* request = create_simple_request(
         thread_id * request_count * 17 + i);
-    requests.push_back(request);
+    requests.emplace_back(request);
     connection.send_request(*request, -1,
-                            bind(&barrier_closure::run, &barrier, _1, _2));
+                            std::bind(&barrier_closure::run, &barrier,
+                                      ph::_1, ph::_2));
   }
   barrier.wait(request_count);
 }
 
 TEST_F(connection_manager_test, ManyClientsTest) {
-  boost::thread thread(start_server(&context));
+  std::thread thread(start_server(&context));
   connection_manager cm(&context, 4);
 
   connection connection(cm.connect("inproc://server.test"));
-  boost::thread_group group;
+  std::vector<std::thread> group;
   for (int i = 0; i < 10; ++i) {
-    group.add_thread(
-        new boost::thread(boost::bind(SendManyMessages, connection, i)));
+    group.emplace_back(std::bind(SendManyMessages, connection, i));
   }
-  group.join_all();
-  scoped_ptr<message_vector> request(create_quit_request());
+  for (auto& t : group) t.join();
+  std::unique_ptr<message_vector> request(create_quit_request());
   sync_event event;
-  connection.send_request(*request, -1,
-                         boost::bind(&sync_event::signal, &event));
+  connection.send_request(*request, -1, std::bind(&sync_event::signal, &event));
   event.wait();
   thread.join();
 }
 
 void handle_request(client_connection connection,
                    message_iterator& request) {
-  int value = boost::lexical_cast<int>(message_to_string(request.next()));
+  int value = std::stoi(message_to_string(request.next()));
   message_vector v;
-  v.push_back(string_to_message(boost::lexical_cast<std::string>(value + 1)));
+  v.push_back(string_to_message(std::to_string(value + 1)));
   connection.reply(&v);
 }
 
@@ -186,8 +186,8 @@ TEST_F(connection_manager_test, TestBindServer) {
   message_vector v;
   v.push_back(string_to_message("317"));
   sync_event event;
-  c.send_request(v, -1,
-                boost::bind(&handle_server_response, &event, _1, _2));
+  c.send_request(v, -1, std::bind(&handle_server_response, &event,
+                                  ph::_1, ph::_2));
   event.wait();
 }
 
@@ -214,8 +214,8 @@ TEST_F(connection_manager_test, ProcessesSingleCallback) {
   CHECK_EQ(kReply, message_to_string(messages[0]));
 }
 
-void Increment(boost::mutex* mu,
-               boost::condition_variable* cond, int* x) {
+void Increment(std::mutex* mu,
+               std::condition_variable* cond, int* x) {
   mu->lock();
   (*x)++;
   cond->notify_one();
@@ -223,9 +223,9 @@ void Increment(boost::mutex* mu,
 }
 
 void add_many_closures(connection_manager* cm) {
-  boost::mutex mu;
-  boost::condition_variable cond;
-  boost::unique_lock<boost::mutex> lock(mu);
+  std::mutex mu;
+  std::condition_variable cond;
+  std::unique_lock<std::mutex> lock(mu);
   int x = 0;
   const int kMany = 137;
   for (int i = 0; i < kMany; ++i) {
@@ -240,11 +240,10 @@ void add_many_closures(connection_manager* cm) {
 TEST_F(connection_manager_test, ProcessesManyCallbacksFromManyThreads) {
   const int thread_count = 10;
   connection_manager cm(&context, thread_count);
-  boost::thread_group thread_group;
+  std::vector<std::thread> thread_group;
   for (int i = 0; i < thread_count; ++i) {
-    thread_group.add_thread(
-        new boost::thread(boost::bind(add_many_closures, &cm)));
+    thread_group.emplace_back(std::bind(add_many_closures, &cm));
   }
-  thread_group.join_all();
+  for (auto& t : thread_group) t.join();
 }
 }  // namespace rpcz

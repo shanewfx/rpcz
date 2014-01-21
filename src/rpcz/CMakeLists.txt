@@ -16,8 +16,7 @@ set(RPCZ_SOURCES
     sync_event.cc zmq_utils.cc
     ${PROTO_SOURCES})
 set(RPCZ_LIB_DEPS ${ZeroMQ_LIBRARIES}
-                  ${PROTOBUF_LIBRARY}
-                  ${Boost_THREAD_LIBRARIES})
+                  ${PROTOBUF_LIBRARY})
 
 add_library(rpcz SHARED ${RPCZ_SOURCES})
 target_link_libraries(rpcz ${RPCZ_LIB_DEPS})
