@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-
+from __future__ import print_function, division
 import os
 import sys
 from distutils import spawn
@@ -9,7 +9,7 @@ class CompilerException(Exception):
     pass
 
 
-def generate_proto(source, output_dir,
+def generate_proto(source, output_dir, include_dirs=None, verbose=False,
                    with_plugin='python', suffix='_pb2.py', plugin_binary=None):
     """Invokes the Protocol Compiler to generate a _pb2.py from the given
     .proto file.  Does nothing if the output already exists and is newer than
@@ -28,13 +28,18 @@ def generate_proto(source, output_dir,
 
     if (os.path.exists(output) and
         os.path.getmtime(source) <= os.path.getmtime(output)):
-        print "Generated proto %s is up-to-date." % output
+        print("Generated proto %s is up-to-date." % output)
         return
 
-    print "Generating %s" % output
+    print("Generating %s" % output)
 
-    protoc_command = protoc + ' -I "%s" --%s_out="%s" "%s"' % (
-            os.path.dirname(source), with_plugin, output_dir, source)
+    include_flags = ""
+    if include_dirs:
+        include_flags = reduce(str.__add__, ['-I "%s"' % d for d in include_dirs])
+
+    protoc_command = protoc + ' -I "%s" %s --%s_out="%s" "%s"' % (
+        os.path.dirname(source), include_flags, with_plugin, output_dir, source)
+    if verbose: print(protoc_command)
     if plugin_binary:
         if os.path.exists(plugin_binary):
             protoc_command += ' --plugin=protoc-gen-%s=%s' % (with_plugin,
@@ -47,4 +52,4 @@ def generate_proto(source, output_dir,
         raise CompilerException(
             "Error occurred while running protoc.")
     else:
-        print "Generated source successfully."
+        print("Generated source successfully.")
