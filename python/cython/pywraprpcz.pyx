@@ -4,14 +4,12 @@ from libc.stdlib cimport malloc, free
 
 import zmq.green as zmq
 import random
-import gevent
-
-__new_zmq_event_context = None
 
 cdef extern from "zmq.h" nogil:
     int errno
     int zmq_send(void*, void*, size_t, int)
 
+__new_zmq_event_context = None
 def new_zmq_event():
     global __new_zmq_event_context
     if not __new_zmq_event_context:
