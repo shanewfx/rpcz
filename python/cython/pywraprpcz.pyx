@@ -2,6 +2,50 @@ from cpython cimport Py_DECREF, Py_INCREF
 from cython.operator cimport dereference as deref
 from libc.stdlib cimport malloc, free
 
+import zmq.green as zmq
+import random
+import gevent
+
+__new_zmq_event_context = None
+
+cdef extern from "zmq.h" nogil:
+    int errno
+    int zmq_send(void*, void*, size_t, int)
+
+def new_zmq_event():
+    global __new_zmq_event_context
+    if not __new_zmq_event_context:
+        __new_zmq_event_context = zmq.Context()
+    context = __new_zmq_event_context
+
+    waited = [False]
+    signalled = [False]
+    receiver = context.socket(zmq.PAIR)
+    endpoint = 'inproc://event-' + str(random.getrandbits(64))
+    receiver.bind(endpoint)
+    sender = context.socket(zmq.PAIR)
+    sender.connect(endpoint)
+
+    def wait():
+        assert not waited[0]
+        waited[0] = True
+        try:
+            receiver.recv()
+        finally:
+            receiver.close()
+            sender.close()
+
+    def signal():
+        cdef int err
+        assert not signalled[0]
+        signalled[0] = True
+        underlying = <size_t>sender.underlying
+        with nogil:
+            err = zmq_send(<void*>underlying, NULL, 0, 0)
+        assert err == 0, err
+
+    return (wait, signal)
+
 
 cdef extern from "Python.h":
     void PyEval_InitThreads()
@@ -49,10 +93,10 @@ cdef string_to_pystring(string s):
     return s.c_str()[:s.size()]
 
 
-cdef extern from "rpcz/sync_event.hpp" namespace "rpcz":
-    cdef cppclass _sync_event "rpcz::sync_event":
-        void signal() nogil
-        void wait() nogil
+#cdef extern from "rpcz/sync_event.hpp" namespace "rpcz":
+#    cdef cppclass _sync_event "rpcz::sync_event":
+#        void signal() nogil
+#        void wait() nogil
 
 cdef extern from "rpcz/rpc.hpp" namespace "rpcz":
     cdef cppclass _rpc "rpcz::rpc":
@@ -62,24 +106,23 @@ cdef extern from "rpcz/rpc.hpp" namespace "rpcz":
         int get_application_error_code()
         long get_deadline_ms()
         void set_deadline_ms(long)
-        int wait() nogil
+        #int wait() nogil
 
 
 cdef class WrappedRPC:
     cdef _rpc *thisptr
-    cdef _sync_event *sync_event
+    #cdef _sync_event *sync_event
 
     def __cinit__(self):
         self.thisptr = new _rpc()
-        self.sync_event = new _sync_event()
+        self.event_wait, self.event_signal = new_zmq_event()
+
     def __dealloc__(self):
-        del self.sync_event
         del self.thisptr
     def ok(self):
         return self.thisptr.ok()
     def wait(self):
-        with nogil:
-            self.sync_event.wait()
+        self.event_wait()
 
     property status:
         def __get__(self):
@@ -119,7 +162,7 @@ cdef void python_callback_bridge(ClosureWrapper *closure_wrapper) with gil:
     response = <object>closure_wrapper.response_obj;
     callback = <object>closure_wrapper.callback
     rpc = <WrappedRPC>closure_wrapper.rpc
-    rpc.sync_event.signal()
+    rpc.event_signal()
     if callback is not None:
         callback(response, rpc)
     Py_DECREF(<object>closure_wrapper.response_obj)
