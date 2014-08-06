@@ -13,7 +13,7 @@ __new_zmq_event_context = None
 def new_zmq_event():
     global __new_zmq_event_context
     if not __new_zmq_event_context:
-        __new_zmq_event_context = zmq.Context()
+        __new_zmq_event_context = zmq.Context(io_threads=0)
     context = __new_zmq_event_context
 
     waited = [False]
