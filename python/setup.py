@@ -59,6 +59,10 @@ setup(
         'build': build,
         'gen_pyext': gen_pyext,
     },
+    install_requires=[
+        'protobuf>=2.5.0',
+        'pyzmq>=14.3.1'
+    ],
     ext_modules=[
         Extension("rpcz.pywraprpcz", ["cython/pywraprpcz.cpp"],
                   extra_compile_args=['-std=c++11'],
