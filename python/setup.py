@@ -1,10 +1,12 @@
+#!/usr/bin/env python
+# -*- coding: utf-8 -*-
 import os
-import compiler
 import shutil
-from distutils.core import Command
+
 from distutils.command import build as build_module
-from distutils.extension import Extension
-from distutils.core import setup
+from setuptools import setup, Command, Extension
+
+import compiler
 
 
 def _build_rpcz_proto():
